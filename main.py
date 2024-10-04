@@ -104,7 +104,7 @@ def _process_compose_file(args: argparse.Namespace, compose_filename: str):
 				docker_stopped = down_results_raw.returncode == 0
 
 				for volume in compose_file_volumes:
-					_backup_volume(args, service_name, volume)
+					_backup_volume(args, service.container_name or service_name, volume)
 			except:
 				logger.exception(f'Attempting to bring down {compose_filename}')
 			finally:
