@@ -1,0 +1,7 @@
+- repo: https://github.com/astral-sh/uv-pre-commit
+  # uv version.
+  rev: 0.4.18
+  hooks:
+    # Compile requirements
+    - id: pip-compile
+      args: [requirements.in, -o, requirements.txt]

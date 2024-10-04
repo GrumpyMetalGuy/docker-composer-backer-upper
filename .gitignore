@@ -160,3 +160,7 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Don't store the compose-spec.json file or the generated model in github, this should be downloaded as needed
+compose-spec.json
+compose_model.py

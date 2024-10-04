@@ -1,0 +1,52 @@
+[project]
+name = "docker-composer-backer-upper"
+version = "0.1.0"
+description = "A utility to help backup running docker-compose container data folders"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "datamodel-code-generator[http]>=0.26.1",
+    "docker-composer-v2>=0.8.8",
+    "more-itertools>=10.5.0",
+    "pydantic>=2.9.2",
+    "regex>=2024.9.11",
+]
+
+[project.scripts]
+main = "main:main"
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+]
+ignore = ["E501"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "tab"
+docstring-code-format = true
+
+[tool.datamodel-codegen]
+field-constraints = true
+snake-case-field = true
+strip-default-none = false
+target-python-version = "3.10"
+url = "https://raw.githubusercontent.com/compose-spec/compose-spec/refs/heads/main/schema/compose-spec.json"
+input-file-type = "jsonschema"
+output-model-type = "pydantic_v2.BaseModel"
+output = "compose_model.py"
+collapse-root-models = true
