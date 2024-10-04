@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
 from collections import abc
 
@@ -54,7 +55,7 @@ def _get_compose_model(compose_filename: str) -> ComposeSpecification:
 	return ComposeSpecification.model_validate_json(json_str)
 
 
-def _backup_volumes(args: argparse.Namespace, service_name: str, volumes: list[str]):
+def _backup_volumes(args: argparse.Namespace, service_name: str, volumes: set[str]):
 	target_backup_folder = os.path.join(args.destination, service_name)
 
 	for backup_counter in range(args.num_backups, -1, -1):
@@ -89,7 +90,9 @@ def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclu
 				exclusion_found = False
 
 				for exclusion in exclusions:
-					if volume.startswith(exclusion):
+					exclusion_re = re.compile(exclusion)
+
+					if exclusion_re.match(volume):
 						exclusion_found = True
 						break
 

@@ -38,7 +38,7 @@ It is possible to exclude volumes from being backed up. This may be particularly
 uv run main -e /path/to/my/special_exclusions.toml <folder to write backups to>
 ```
 
-Please examine the default ```exclusions.toml``` file to see how it's laid out. Note that the entries in this file are substring matches, so any volume that starts with any of the entries in the exclusions file will be excluded from backup.
+Please examine the default ```exclusions.toml``` file to see how it's laid out. Note that the entries in this file are [regexes](<https://regexr.com/>), so any volume that matches any of the regexes in the exclusions file will be excluded from backup.
 
 ## Contributions Welcome!
 
