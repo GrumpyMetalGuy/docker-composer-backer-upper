@@ -54,7 +54,7 @@ def _get_compose_model(compose_filename: str) -> ComposeSpecification:
 	return ComposeSpecification.model_validate_json(json_str)
 
 
-def _backup_volume(args: argparse.Namespace, service_name: str, volume: str):
+def _backup_volumes(args: argparse.Namespace, service_name: str, volumes: list[str]):
 	target_backup_folder = os.path.join(args.destination, service_name)
 
 	for backup_counter in range(args.num_backups, -1, -1):
@@ -70,7 +70,8 @@ def _backup_volume(args: argparse.Namespace, service_name: str, volume: str):
 			else:
 				shutil.move(potential_backup_folder, f'{target_backup_folder}.{backup_counter + 1}')
 
-	shutil.copytree(volume, os.path.join(target_backup_folder, volume[1:]))
+	for volume in volumes:
+		shutil.copytree(volume, os.path.join(target_backup_folder, volume[1:]))
 
 
 def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclusions: set[str]):
@@ -109,8 +110,7 @@ def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclu
 			docker_stopped = down_results_raw.returncode == 0
 
 			for service_name, volumes in volumes_to_backup.items():
-				for volume in volumes:
-					_backup_volume(args, service_name, volume)
+				_backup_volumes(args, service_name, volumes)
 		except:
 			logger.exception(f'Attempting to bring down {compose_filename} and copy volumes')
 		finally:
