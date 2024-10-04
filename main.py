@@ -4,8 +4,10 @@ import logging
 import os
 import re
 import shutil
+import sys
 from collections import abc
 
+import docker_composer_v2.base
 import more_itertools
 import toml
 import yaml
@@ -72,7 +74,11 @@ def _backup_volumes(args: argparse.Namespace, service_name: str, volumes: set[st
 				shutil.move(potential_backup_folder, f'{target_backup_folder}.{backup_counter + 1}')
 
 	for volume in volumes:
-		shutil.copytree(volume, os.path.join(target_backup_folder, volume[1:]))
+		if os.path.exists(volume):
+			try:
+				shutil.copytree(volume, os.path.join(target_backup_folder, volume[1:]))
+			except Exception as e:
+				logger.error(f'Error copying files: {e}')
 
 
 def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclusions: set[str]):
@@ -154,6 +160,12 @@ def process(args: argparse.Namespace):
 
 
 def main():
+	logging.basicConfig()
+
+	# Stop showing DEBUG messages from docker_composer_2
+	docker_composer_v2.base.logger.remove()
+	docker_composer_v2.base.logger.add(sys.stdout, level='INFO')
+
 	argument_parser = argparse.ArgumentParser(
 		description='Utility program to manage backups for docker-compose Docker containers'
 	)
