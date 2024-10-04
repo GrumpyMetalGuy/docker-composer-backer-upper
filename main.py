@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import shutil
-from collections.abc import Iterable
+from collections import abc
 
 import more_itertools
 import toml
@@ -15,7 +15,7 @@ from compose_model import ComposeSpecification
 logger = logging.getLogger(__name__)
 
 
-def _get_compose_files() -> Iterable[str]:
+def _get_compose_files() -> abc.Iterable[str]:
 	"""
 	Determine list of compose files to process.
 
@@ -76,6 +76,8 @@ def _backup_volume(args: argparse.Namespace, service_name: str, volume: str):
 def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclusions: set[str]):
 	compose_model = _get_compose_model(compose_filename)
 
+	volumes_to_backup = {}
+
 	for service_name, service in compose_model.services.items():
 		compose_file_volumes = set()
 
@@ -94,29 +96,31 @@ def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclu
 					compose_file_volumes.add(volume)
 
 		if compose_file_volumes:
-			docker_compose_instance = DockerCompose(file=compose_filename)
+			volumes_to_backup[service.container_name or service_name] = compose_file_volumes
 
-			docker_stopped = False
+	if volumes_to_backup:
+		docker_compose_instance = DockerCompose(file=compose_filename)
 
-			try:
-				down_results_raw = docker_compose_instance.down().call(capture_output=True)
+		docker_stopped = False
 
-				docker_stopped = down_results_raw.returncode == 0
+		try:
+			down_results_raw = docker_compose_instance.down().call(capture_output=True)
 
-				for volume in compose_file_volumes:
-					_backup_volume(args, service.container_name or service_name, volume)
-			except:
-				logger.exception(f'Attempting to bring down {compose_filename}')
-			finally:
-				if docker_stopped:
-					up_results_raw = docker_compose_instance.up(detach=True).call(
-						capture_output=True
+			docker_stopped = down_results_raw.returncode == 0
+
+			for service_name, volumes in volumes_to_backup.items():
+				for volume in volumes:
+					_backup_volume(args, service_name, volume)
+		except:
+			logger.exception(f'Attempting to bring down {compose_filename} and copy volumes')
+		finally:
+			if docker_stopped:
+				up_results_raw = docker_compose_instance.up(detach=True).call(capture_output=True)
+
+				if up_results_raw.returncode != 0:
+					logger.warning(
+						f'Error restarting docker-compose file {compose_filename}, return code was {up_results_raw.returncode}'
 					)
-
-					if up_results_raw.returncode != 0:
-						logger.warning(
-							f'Error restarting docker-compose file {compose_filename}, return code was {up_results_raw.returncode}'
-						)
 
 
 def process(args: argparse.Namespace):
