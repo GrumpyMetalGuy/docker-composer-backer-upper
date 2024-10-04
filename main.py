@@ -79,7 +79,7 @@ def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclu
 	for service_name, service in compose_model.services.items():
 		compose_file_volumes = set()
 
-		for volume in service.volumes:
+		for volume in service.volumes or []:
 			if volume.startswith('/'):
 				volume = volume.split(':')[0]
 
