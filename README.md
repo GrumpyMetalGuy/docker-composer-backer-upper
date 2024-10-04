@@ -2,7 +2,7 @@
 
 A gloriously-named utility to back up running docker containers that are managed by docker-compose v2.
 
-The utility attempts to determine which docker-compose YAML scripts are being run on the current machine. Each running container's YAML file is inspected for local directory mappings, and if any are found, the container is stopped. The directories are backed up to a folder, then the container is restarted.
+The utility detects which docker-compose YAML scripts are being run on the current machine. Each running container's YAML file is inspected for local directory mappings, and if any are found, the container is stopped. The directories are backed up to a folder, then the container is restarted.
 
 The docker-composer-backer-upper is developed using [uv](<https://docs.astral.sh/uv/>). The instructions that follow assume that you have ```uv``` installed. If you don't want to use it, it will hopefully be simple enough to determine how to perform the equivalent actions using your development environment of choice.
 
@@ -32,9 +32,15 @@ uv run main -n 10 <folder to write backups to>
 
 ## Volume Exclusions
 
-There is a list of volume entries that are ignored when performing backups. This can be found in the ```COMMON_EXCLUSIONS``` set at the top of ```main.py```. If you have any specific folders or files that you want to ignore, these can be added here. This may end up being parameterised in a later version if this is of use.
+It is possible to exclude volumes from being backed up. This may be particularly relevant for mounted media folders. A file called ```exclusions.toml``` is included with some basic defaults. This file can be edited to your liking, or you can specify a different file by running:
 
-## Contributons Welcome!
+```
+uv run main -e /path/to/my/special_exclusions.toml <folder to write backups to>
+```
+
+Please examine the default ```exclusions.toml``` file to see how it's laid out. Note that the entries in this file are substring matches, so any volume that starts with any of the entries in the exclusions file will be excluded from backup.
+
+## Contributions Welcome!
 
 If you spot anything that is broken here, or identify any improvements, please submit a PR or open an issue, and I'll do my best to take a look in a reasonable timeframe (real-life workload permitting).
 
@@ -42,5 +48,5 @@ If you spot anything that is broken here, or identify any improvements, please s
 
 This project is licensed under
 
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or
+ * MIT license ([LICENSE-MIT](LICENSE) or
    https://opensource.org/licenses/MIT)

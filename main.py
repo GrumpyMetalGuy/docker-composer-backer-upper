@@ -6,24 +6,13 @@ import shutil
 from collections.abc import Iterable
 
 import more_itertools
+import toml
 import yaml
 from docker_composer_v2 import DockerCompose
 
 from compose_model import ComposeSpecification
 
 logger = logging.getLogger(__name__)
-
-
-"""
-A set of common path exclusions for docker volume mappings that should never be backed up.
-"""
-COMMON_EXCLUSIONS = {
-	'/etc/passwd',
-	'/etc/groups',
-	'/etc/localtime',
-	'/var/run/docker.sock',
-	'/etc/os-release',
-}
 
 
 def _get_compose_files() -> Iterable[str]:
@@ -84,14 +73,25 @@ def _backup_volume(args: argparse.Namespace, service_name: str, volume: str):
 	shutil.copytree(volume, os.path.join(target_backup_folder, volume[1:]))
 
 
-def _process_compose_file(args: argparse.Namespace, compose_filename: str):
+def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclusions: set[str]):
 	compose_model = _get_compose_model(compose_filename)
 
 	for service_name, service in compose_model.services.items():
-		compose_file_volumes = (
-			set([volume.split(':')[0] for volume in service.volumes if volume.startswith('/')])
-			- COMMON_EXCLUSIONS
-		)
+		compose_file_volumes = set()
+
+		for volume in service.volumes:
+			if volume.startswith('/'):
+				volume = volume.split(':')[0]
+
+				exclusion_found = False
+
+				for exclusion in exclusions:
+					if volume.startswith(exclusion):
+						exclusion_found = True
+						break
+
+				if not exclusion_found:
+					compose_file_volumes.add(volume)
 
 		if compose_file_volumes:
 			docker_compose_instance = DockerCompose(file=compose_filename)
@@ -129,8 +129,21 @@ def process(args: argparse.Namespace):
 
 	compose_files = _get_compose_files()
 
+	exclusions = []
+
+	if args.exclusions:
+		try:
+			exclusions_file = toml.load(args.exclusions)
+
+			if 'exclusions' not in exclusions_file:
+				logger.info(f'No exclusions entry found in {args.exclusions}')
+			else:
+				exclusions = set(exclusions_file['exclusions'])
+		except:
+			logger.exception('Loading exclusions from TOML file')
+
 	for compose_file in compose_files:
-		_process_compose_file(args, compose_file)
+		_process_compose_file(args, compose_file, exclusions)
 
 
 def main():
@@ -149,6 +162,16 @@ def main():
 		default=5,
 		nargs='?',
 		metavar='number',
+	)
+
+	argument_parser.add_argument(
+		'-e',
+		'--exclusions',
+		type=str,
+		help='name of volume exclusions TOML file',
+		default='exclusions.toml',
+		nargs='?',
+		metavar='exclusions filename',
 	)
 
 	args = argument_parser.parse_args()
