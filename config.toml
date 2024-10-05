@@ -1,3 +1,6 @@
+# Where to write backups to
+backup_folder = "./backups"
+
 # A list of regexes that can be matched for any volumes that should be excluded from backup.
 exclusions = [
     '/etc/passwd',
@@ -10,3 +13,6 @@ exclusions = [
 # A list of regexes that, if matched, will force a volume to be included, even if it would otherwise be
 # excluded via the exclusions list above.
 inclusions = []
+
+# Number of backups to keep
+number_backups = 2

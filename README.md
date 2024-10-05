@@ -23,27 +23,23 @@ This automatically downloads the latest docker-compose JSON Schema and generates
 Run using the following command:
 
 ```
-uv run main <folder to write backups to>
+uv run main
 ```
 
-By default, up to five backups are kept of each backed up docker volume. If you want to modify this number, use the ```-n``` argument:
+If you'd like to specify a different config file to the one included, use the ```-c``` option:
 
 ```
-uv run main -n 10 <folder to write backups to>
+uv run main -c <path to config file>
 ```
 
 ## Configuration
 
-By default, the backer-upper will look for a file called ```config.toml``` in the same directory as the main script. This can be overridden as follows: 
+By default, the backer-upper will look for a file called ```config.toml``` in the same directory as the main script. The default file contains comments on which configuration options are available. The options available are:
 
-```
-uv run main -c /path/to/my/special_config.toml <folder to write backups to>
-```
-
-The default ```config.toml``` file contains comments on which configuration options are available. The options available include:
-
+- The backup folder location.
 - A list of exclusion [regexes](<https://regexr.com/>), which will stop volumes from being backed up if matched.
 - A list of inclusion regexes, which will force volumes to be backed up if matched, even if they would be matched by an exclusion.
+- The number of folder backups to keep.
 
 ## Contributions Welcome!
 

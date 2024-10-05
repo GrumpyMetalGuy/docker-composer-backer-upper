@@ -56,10 +56,12 @@ def _get_compose_model(compose_filename: str) -> ComposeSpecification:
 	return ComposeSpecification.model_validate_json(json_str)
 
 
-def _backup_volumes(args: argparse.Namespace, service_name: str, volumes: set[str]):
-	target_backup_folder = os.path.join(args.destination, service_name)
+def _backup_volumes(config: dict, service_name: str, volumes: set[str]):
+	target_backup_folder = os.path.join(config['backup_folder'], service_name)
 
-	for backup_counter in range(args.num_backups, -1, -1):
+	number_of_backups = config.get('num_backups', 2)
+
+	for backup_counter in range(number_of_backups, -1, -1):
 		if backup_counter:
 			potential_backup_folder = f'{target_backup_folder}.{backup_counter}'
 		else:
@@ -67,7 +69,7 @@ def _backup_volumes(args: argparse.Namespace, service_name: str, volumes: set[st
 
 		if os.path.exists(potential_backup_folder):
 			# If it's the last one, nuke it
-			if backup_counter == args.num_backups:
+			if backup_counter == number_of_backups:
 				shutil.rmtree(potential_backup_folder)
 			else:
 				shutil.move(potential_backup_folder, f'{target_backup_folder}.{backup_counter + 1}')
@@ -84,7 +86,7 @@ def _backup_volumes(args: argparse.Namespace, service_name: str, volumes: set[st
 				logger.error(f'Error copying files: {e}')
 
 
-def _process_compose_file(args: argparse.Namespace, compose_filename: str, config: dict):
+def _process_compose_file(compose_filename: str, config: dict):
 	compose_model = _get_compose_model(compose_filename)
 
 	volumes_to_backup = {}
@@ -140,7 +142,7 @@ def _process_compose_file(args: argparse.Namespace, compose_filename: str, confi
 			docker_stopped = down_results_raw.returncode == 0
 
 			for service_name, volumes in volumes_to_backup.items():
-				_backup_volumes(args, service_name, volumes)
+				_backup_volumes(config, service_name, volumes)
 		except:
 			logger.exception(f'Attempting to bring down {compose_filename} and copy volumes')
 		finally:
@@ -166,7 +168,7 @@ def process(args: argparse.Namespace):
 	config = toml.load(args.config)
 
 	for compose_file in compose_files:
-		_process_compose_file(args, compose_file, config)
+		_process_compose_file(compose_file, config)
 
 
 def main():
@@ -176,19 +178,6 @@ def main():
 
 	argument_parser = argparse.ArgumentParser(
 		description='Utility program to manage backups for docker-compose Docker containers'
-	)
-	argument_parser.add_argument(
-		'destination', type=str, help='directory to place backups of container files in'
-	)
-
-	argument_parser.add_argument(
-		'-n',
-		'--num_backups',
-		type=int,
-		help='number of backups to keep for each compose file',
-		default=5,
-		nargs='?',
-		metavar='number',
 	)
 
 	argument_parser.add_argument(
