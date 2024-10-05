@@ -143,9 +143,12 @@ def _process_compose_file(compose_filename: str, args: argparse.Namespace, confi
 		docker_stopped = False
 
 		try:
-			down_results_raw = docker_compose_instance.down().call(capture_output=True)
+			if args.dry_run:
+				logger.info(f'Would have stopped docker-compose file {compose_filename}')
+			else:
+				down_results_raw = docker_compose_instance.down().call(capture_output=True)
 
-			docker_stopped = down_results_raw.returncode == 0
+				docker_stopped = down_results_raw.returncode == 0
 
 			for service_name, volumes in volumes_to_backup.items():
 				_backup_volumes(args, config, service_name, volumes)
