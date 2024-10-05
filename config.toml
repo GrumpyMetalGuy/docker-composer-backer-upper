@@ -8,6 +8,8 @@ exclusions = [
     '/etc/localtime',
     '/var/run/docker.sock',
     '/etc/os-release',
+    '/proc',
+    '/sys',
 ]
 
 # A list of regexes that, if matched, will force a volume to be included, even if it would otherwise be
