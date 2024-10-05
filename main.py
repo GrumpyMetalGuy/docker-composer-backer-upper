@@ -56,37 +56,43 @@ def _get_compose_model(compose_filename: str) -> ComposeSpecification:
 	return ComposeSpecification.model_validate_json(json_str)
 
 
-def _backup_volumes(config: dict, service_name: str, volumes: set[str]):
+def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, volumes: set[str]):
 	target_backup_folder = os.path.join(config['backup_folder'], service_name)
 
 	number_of_backups = config.get('num_backups', 2)
 
-	for backup_counter in range(number_of_backups, -1, -1):
-		if backup_counter:
-			potential_backup_folder = f'{target_backup_folder}.{backup_counter}'
-		else:
-			potential_backup_folder = target_backup_folder
-
-		if os.path.exists(potential_backup_folder):
-			# If it's the last one, nuke it
-			if backup_counter == number_of_backups:
-				shutil.rmtree(potential_backup_folder)
+	if not args.dry_run:
+		for backup_counter in range(number_of_backups, -1, -1):
+			if backup_counter:
+				potential_backup_folder = f'{target_backup_folder}.{backup_counter}'
 			else:
-				shutil.move(potential_backup_folder, f'{target_backup_folder}.{backup_counter + 1}')
+				potential_backup_folder = target_backup_folder
+
+			if os.path.exists(potential_backup_folder):
+				# If it's the last one, nuke it
+				if backup_counter == number_of_backups:
+					shutil.rmtree(potential_backup_folder)
+				else:
+					shutil.move(
+						potential_backup_folder, f'{target_backup_folder}.{backup_counter + 1}'
+					)
 
 	for volume in volumes:
 		if os.path.exists(volume):
 			try:
 				destination_path = os.path.join(target_backup_folder, volume[1:])
 
-				logger.info(f'Copying from {volume} to {destination_path}', name='foo')
+				if args.dry_run:
+					logger.info(f'Would have copied from {volume} to {destination_path}')
+				else:
+					logger.info(f'Copying from {volume} to {destination_path}')
 
-				shutil.copytree(volume, destination_path)
+					shutil.copytree(volume, destination_path)
 			except Exception as e:
 				logger.error(f'Error copying files: {e}')
 
 
-def _process_compose_file(compose_filename: str, config: dict):
+def _process_compose_file(compose_filename: str, args: argparse.Namespace, config: dict):
 	compose_model = _get_compose_model(compose_filename)
 
 	volumes_to_backup = {}
@@ -142,7 +148,7 @@ def _process_compose_file(compose_filename: str, config: dict):
 			docker_stopped = down_results_raw.returncode == 0
 
 			for service_name, volumes in volumes_to_backup.items():
-				_backup_volumes(config, service_name, volumes)
+				_backup_volumes(args, config, service_name, volumes)
 		except:
 			logger.exception(f'Attempting to bring down {compose_filename} and copy volumes')
 		finally:
@@ -168,7 +174,7 @@ def process(args: argparse.Namespace):
 	config = toml.load(args.config)
 
 	for compose_file in compose_files:
-		_process_compose_file(compose_file, config)
+		_process_compose_file(compose_file, args, config)
 
 
 def main():
@@ -190,6 +196,12 @@ def main():
 		metavar='config filename',
 	)
 
+	argument_parser.add_argument(
+		'-d',
+		'--dry_run',
+		help='perform a dry run',
+		action='store_true',
+	)
 	args = argument_parser.parse_args()
 
 	process(args)
