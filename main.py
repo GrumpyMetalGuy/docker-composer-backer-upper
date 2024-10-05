@@ -1,24 +1,23 @@
 import argparse
+import collections.abc
 import json
-import logging
 import os
 import re
 import shutil
 import sys
-from collections import abc
 
-import docker_composer_v2.base
 import more_itertools
 import toml
 import yaml
-from docker_composer_v2 import DockerCompose
+from docker_composer_v2 import DockerCompose, base
+from loguru import logger
 
 from compose_model import ComposeSpecification
 
-logger = logging.getLogger(__name__)
+logger = logger.patch(lambda record: record.update(name='docker-composer-backer-upper'))
 
 
-def _get_compose_files() -> abc.Iterable[str]:
+def _get_compose_files() -> collections.abc.Iterable[str]:
 	"""
 	Determine list of compose files to process.
 
@@ -76,15 +75,22 @@ def _backup_volumes(args: argparse.Namespace, service_name: str, volumes: set[st
 	for volume in volumes:
 		if os.path.exists(volume):
 			try:
-				shutil.copytree(volume, os.path.join(target_backup_folder, volume[1:]))
+				destination_path = os.path.join(target_backup_folder, volume[1:])
+
+				logger.info(f'Copying from {volume} to {destination_path}', name='foo')
+
+				shutil.copytree(volume, destination_path)
 			except Exception as e:
 				logger.error(f'Error copying files: {e}')
 
 
-def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclusions: set[str]):
+def _process_compose_file(args: argparse.Namespace, compose_filename: str, config: dict):
 	compose_model = _get_compose_model(compose_filename)
 
 	volumes_to_backup = {}
+
+	exclusions = set(config.get('exclusions', []))
+	inclusions = set(config.get('inclusions', []))
 
 	for service_name, service in compose_model.services.items():
 		compose_file_volumes = set()
@@ -93,6 +99,21 @@ def _process_compose_file(args: argparse.Namespace, compose_filename: str, exclu
 			if volume.startswith('/'):
 				volume = volume.split(':')[0]
 
+				# First, look for forced inclusions
+				inclusion_found = False
+
+				for inclusion in inclusions:
+					inclusion_re = re.compile(inclusion)
+
+					if inclusion_re.match(volume):
+						inclusion_found = True
+						break
+
+				if inclusion_found:
+					compose_file_volumes.add(volume)
+					continue
+
+				# Otherwise, check and see if we have to exclude the volume instead.
 				exclusion_found = False
 
 				for exclusion in exclusions:
@@ -142,29 +163,16 @@ def process(args: argparse.Namespace):
 
 	compose_files = _get_compose_files()
 
-	exclusions = []
-
-	if args.exclusions:
-		try:
-			exclusions_file = toml.load(args.exclusions)
-
-			if 'exclusions' not in exclusions_file:
-				logger.info(f'No exclusions entry found in {args.exclusions}')
-			else:
-				exclusions = set(exclusions_file['exclusions'])
-		except:
-			logger.exception('Loading exclusions from TOML file')
+	config = toml.load(args.config)
 
 	for compose_file in compose_files:
-		_process_compose_file(args, compose_file, exclusions)
+		_process_compose_file(args, compose_file, config)
 
 
 def main():
-	logging.basicConfig()
-
 	# Stop showing DEBUG messages from docker_composer_2
-	docker_composer_v2.base.logger.remove()
-	docker_composer_v2.base.logger.add(sys.stdout, level='INFO')
+	base.logger.remove()
+	base.logger.add(sys.stdout, level='INFO')
 
 	argument_parser = argparse.ArgumentParser(
 		description='Utility program to manage backups for docker-compose Docker containers'
@@ -184,13 +192,13 @@ def main():
 	)
 
 	argument_parser.add_argument(
-		'-e',
-		'--exclusions',
+		'-c',
+		'--config',
 		type=str,
-		help='name of volume exclusions TOML file',
-		default='exclusions.toml',
+		help='name of config file',
+		default='config.toml',
 		nargs='?',
-		metavar='exclusions filename',
+		metavar='config filename',
 	)
 
 	args = argument_parser.parse_args()

@@ -1,0 +1,12 @@
+# A list of regexes that can be matched for any volumes that should be excluded from backup.
+exclusions = [
+    '/etc/passwd',
+    '/etc/groups',
+    '/etc/localtime',
+    '/var/run/docker.sock',
+    '/etc/os-release',
+]
+
+# A list of regexes that, if matched, will force a volume to be included, even if it would otherwise be
+# excluded via the exclusions list above.
+inclusions = []
