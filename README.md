@@ -53,9 +53,11 @@ By default, the backer-upper will look for a file called ```config.toml``` in th
 default file contains comments on which configuration options are available. The options available are:
 
 - The backup folder location.
-- A list of exclusion [regexes](<https://regexr.com/>), which will stop volumes from being backed up if matched.
-- A list of inclusion regexes, which will force volumes to be backed up if matched, even if they would be matched by an
-  exclusion.
+- A list of docker-compose file exclusions, which will exclude any running docker-compose containers using these
+  filenames.
+- A list of volume exclusion [regexes](<https://regexr.com/>), which will stop volumes from being backed up if matched.
+- A list of volume inclusion regexes, which will force volumes to be backed up if matched, even if they would be matched
+  by an exclusion.
 - The number of folder backups to keep.
 
 ## Contributions Welcome!

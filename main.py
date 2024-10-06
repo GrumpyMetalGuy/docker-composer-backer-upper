@@ -104,8 +104,8 @@ def _process_compose_file(compose_filename: str, args: argparse.Namespace, confi
 
 	volumes_to_backup = {}
 
-	exclusions = set(config.get('exclusions', []))
-	inclusions = set(config.get('inclusions', []))
+	exclusions = set(config.get('volume_exclusions', []))
+	inclusions = set(config.get('volume_inclusions', []))
 
 	for service_name, service in compose_model.services.items():
 		compose_file_volumes = set()
@@ -183,7 +183,11 @@ def process(args: argparse.Namespace):
 
 	config = toml.load(args.config)
 
-	for compose_file in compose_files:
+	docker_compose_file_exclusions = config.get('docker_compose_exclusions', [])
+
+	for compose_file in filter(
+		lambda filename: filename not in docker_compose_file_exclusions, compose_files
+	):
 		_process_compose_file(compose_file, args, config)
 
 
