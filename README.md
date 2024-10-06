@@ -5,8 +5,8 @@ v2.
 
 The utility detects which containers are being run by docker-compose on the current machine. Each running container's
 YAML file is inspected for local directory mappings, and if any are found, the container is stopped. The directories are
-backed up to a folder, then the container is restarted. Stopping the containers before copying the files means that
-there is no possibility of the files being modified during the copy, or held open to prevent the copy taking place.
+backed up to a zipped tarfile, then the container is restarted. Stopping the containers before copying the files means
+that there is no possibility of the files being modified during the copy, or held open to prevent the copy taking place.
 
 [Docker volumes](<https://docs.docker.com/engine/storage/volumes/>) are not backed up, as these may be used by multiple
 containers, so it would be more difficult to shut all of these down before backing the volumes up.

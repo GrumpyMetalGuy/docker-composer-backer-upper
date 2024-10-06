@@ -1,10 +1,12 @@
 import argparse
 import collections.abc
+import contextlib
 import json
 import os
 import re
 import shutil
 import sys
+import tarfile
 
 import more_itertools
 import toml
@@ -57,16 +59,17 @@ def _get_compose_model(compose_filename: str) -> ComposeSpecification:
 
 
 def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, volumes: set[str]):
-	target_backup_folder = os.path.join(config['backup_folder'], service_name)
+	target_backup_file = os.path.join(config['backup_folder'], f'{service_name}.tgz')
 
 	number_of_backups = config.get('num_backups', 2)
+	is_dry_run = args.dry_run
 
-	if not args.dry_run:
+	if not is_dry_run:
 		for backup_counter in range(number_of_backups, -1, -1):
 			if backup_counter:
-				potential_backup_folder = f'{target_backup_folder}.{backup_counter}'
+				potential_backup_folder = f'{target_backup_file}.{backup_counter}'
 			else:
-				potential_backup_folder = target_backup_folder
+				potential_backup_folder = target_backup_file
 
 			if os.path.exists(potential_backup_folder):
 				# If it's the last one, nuke it
@@ -74,22 +77,26 @@ def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, v
 					shutil.rmtree(potential_backup_folder)
 				else:
 					shutil.move(
-						potential_backup_folder, f'{target_backup_folder}.{backup_counter + 1}'
+						potential_backup_folder, f'{target_backup_file}.{backup_counter + 1}'
 					)
 
-	for volume in volumes:
-		if os.path.exists(volume):
-			try:
-				destination_path = os.path.join(target_backup_folder, volume[1:])
+	if is_dry_run:
+		target_file_context = contextlib.nullcontext()
+	else:
+		target_file_context = tarfile.open(target_backup_file, 'w:gz')
 
-				if args.dry_run:
-					logger.info(f'Would have copied from {volume} to {destination_path}')
-				else:
-					logger.info(f'Copying from {volume} to {destination_path}')
+	with target_file_context:
+		for volume in volumes:
+			if os.path.exists(volume):
+				try:
+					if is_dry_run:
+						logger.info(f'Would have copied from {volume} to {target_backup_file}')
+					else:
+						logger.info(f'Copying from {volume} to {target_backup_file}')
 
-					shutil.copytree(volume, destination_path)
-			except Exception as e:
-				logger.error(f'Error copying files: {e}')
+						target_file_context.add(volume)
+				except Exception as e:
+					logger.error(f'Error copying files: {e}')
 
 
 def _process_compose_file(compose_filename: str, args: argparse.Namespace, config: dict):
