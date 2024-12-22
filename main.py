@@ -67,17 +67,17 @@ def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, v
 	if not is_dry_run:
 		for backup_counter in range(number_of_backups, -1, -1):
 			if backup_counter:
-				potential_backup_folder = f'{target_backup_file}.{backup_counter}'
+				potential_backup_file = f'{target_backup_file}.{backup_counter}'
 			else:
-				potential_backup_folder = target_backup_file
+				potential_backup_file = target_backup_file
 
-			if os.path.exists(potential_backup_folder):
+			if os.path.exists(potential_backup_file):
 				# If it's the last one, nuke it
 				if backup_counter == number_of_backups:
-					shutil.rmtree(potential_backup_folder)
+					os.remove(potential_backup_file)
 				else:
 					shutil.move(
-						potential_backup_folder, f'{target_backup_file}.{backup_counter + 1}'
+						potential_backup_file, f'{target_backup_file}.{backup_counter + 1}'
 					)
 
 	if is_dry_run:
