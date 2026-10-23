@@ -14,7 +14,7 @@ import yaml
 from docker_composer import DockerCompose, base
 from loguru import logger
 
-from compose_model import ComposeSpecification
+from compose_model import ComposeSpecification, Volumes
 
 logger = logger.patch(lambda record: record.update(name='docker-composer-backer-upper'))
 
@@ -76,22 +76,24 @@ def _get_compose_model(compose_filename: str) -> ComposeSpecification:
 def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, volumes: set[str]):
 	target_backup_file = os.path.join(config['backup_folder'], f'{service_name}.tgz')
 
-	number_of_backups = config.get('num_backups', 2)
+	number_of_backups = config.get('number_backups', 2)
 	is_dry_run = args.dry_run
 
 	if not is_dry_run:
-		for backup_counter in range(number_of_backups, -1, -1):
-			if backup_counter:
-				potential_backup_file = f'{target_backup_file}.{backup_counter}'
-			else:
-				potential_backup_file = target_backup_file
+		os.makedirs(config['backup_folder'], exist_ok=True)
+
+		for backup_counter in range(number_of_backups, 0, -1):
+			potential_backup_file = f'{target_backup_file}.{backup_counter}'
 
 			if os.path.exists(potential_backup_file):
-				# If it's the last one, nuke it
+				# If it's the oldest kept backup, drop it; otherwise shift it up one slot.
 				if backup_counter == number_of_backups:
 					os.remove(potential_backup_file)
 				else:
 					shutil.move(potential_backup_file, f'{target_backup_file}.{backup_counter + 1}')
+
+		if os.path.exists(target_backup_file):
+			shutil.move(target_backup_file, f'{target_backup_file}.1')
 
 	if is_dry_run:
 		target_file_context = contextlib.nullcontext()
@@ -107,9 +109,51 @@ def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, v
 					else:
 						logger.info(f'Copying from {volume} to {target_backup_file}')
 
-						target_file_context.add(volume)
+						target_file_context.add(volume, arcname=volume.lstrip('/'))
 				except Exception as e:
 					logger.error(f'Error copying files: {e}')
+
+
+# Annotation key that marks a service as excluded from backup.
+EXCLUDE_ANNOTATION = 'dcbu.exclude'
+
+
+def _bind_host_path(volume: str | Volumes) -> str | None:
+	"""
+	Return the host-side path for a bind mount, or None for non-bind volumes.
+
+	Short-form string volumes are "SOURCE:TARGET[:MODE]"; long-form entries are Volumes
+	mappings whose bind source we only report when type is bind.
+	"""
+	if isinstance(volume, Volumes):
+		if volume.type != 'bind':
+			return None
+
+		return volume.source
+
+	source = volume.split(':')[0]
+
+	if source.startswith(('/', './', '../', '~')):
+		return source
+
+	return None
+
+
+def _service_excluded(service) -> bool:
+	"""
+	Return True if a service declares the exclude annotation.
+
+	Annotations may be a mapping of key/value pairs or a list of "key=value" strings.
+	"""
+	annotations = service.annotations
+
+	if not annotations:
+		return False
+
+	if isinstance(annotations, dict):
+		return EXCLUDE_ANNOTATION in annotations
+
+	return any(item.split('=')[0] == EXCLUDE_ANNOTATION for item in annotations.root)
 
 
 def _process_compose_file(compose_filename: str, args: argparse.Namespace, config: dict):
@@ -119,40 +163,30 @@ def _process_compose_file(compose_filename: str, args: argparse.Namespace, confi
 
 	exclusions = set(config.get('volume_exclusions', []))
 	inclusions = set(config.get('volume_inclusions', []))
+	exclusion_res = [re.compile(e) for e in exclusions]
+	inclusion_res = [re.compile(i) for i in inclusions]
 
-	for service_name, service in compose_model.services.items():
+	for service_name, service in (compose_model.services or {}).items():
+		if _service_excluded(service):
+			logger.info(f'Skipping service {service_name}: marked with {EXCLUDE_ANNOTATION}')
+			continue
+
 		compose_file_volumes = set()
 
 		for volume in service.volumes or []:
-			if volume.startswith('/'):
-				volume = volume.split(':')[0]
+			volume = _bind_host_path(volume)
 
-				# First, look for forced inclusions
-				inclusion_found = False
+			if not volume:
+				continue
 
-				for inclusion in inclusions:
-					inclusion_re = re.compile(inclusion)
+			# First, look for forced inclusions
+			if any(i.match(volume) for i in inclusion_res):
+				compose_file_volumes.add(volume)
+				continue
 
-					if inclusion_re.match(volume):
-						inclusion_found = True
-						break
-
-				if inclusion_found:
-					compose_file_volumes.add(volume)
-					continue
-
-				# Otherwise, check and see if we have to exclude the volume instead.
-				exclusion_found = False
-
-				for exclusion in exclusions:
-					exclusion_re = re.compile(exclusion)
-
-					if exclusion_re.match(volume):
-						exclusion_found = True
-						break
-
-				if not exclusion_found:
-					compose_file_volumes.add(volume)
+			# Otherwise, check if the volume is excluded.
+			if not any(e.match(volume) for e in exclusion_res):
+				compose_file_volumes.add(volume)
 
 		if compose_file_volumes:
 			volumes_to_backup[service.container_name or service_name] = compose_file_volumes
@@ -160,22 +194,23 @@ def _process_compose_file(compose_filename: str, args: argparse.Namespace, confi
 	if volumes_to_backup:
 		docker_compose_instance = _get_docker_compose_object(args, file=compose_filename)
 
-		docker_stopped = False
-
 		try:
 			if args.dry_run:
 				logger.info(f'Would have stopped docker-compose file {compose_filename}')
 			else:
 				down_results_raw = docker_compose_instance.down().call(capture_output=True)
 
-				docker_stopped = down_results_raw.returncode == 0
+				if down_results_raw.returncode != 0:
+					logger.warning(
+						f'Error stopping docker-compose file {compose_filename}, return code was {down_results_raw.returncode}'
+					)
 
 			for service_name, volumes in volumes_to_backup.items():
 				_backup_volumes(args, config, service_name, volumes)
 		except:
 			logger.exception(f'Attempting to bring down {compose_filename} and copy volumes')
 		finally:
-			if docker_stopped:
+			if not args.dry_run:
 				up_results_raw = docker_compose_instance.up(detach=True).call(capture_output=True)
 
 				if up_results_raw.returncode != 0:
@@ -202,9 +237,11 @@ def process(args: argparse.Namespace):
 
 	docker_compose_file_exclusions = config.get('docker_compose_exclusions', [])
 
-	for compose_file in filter(
-		lambda filename: filename not in docker_compose_file_exclusions, compose_files
-	):
+	for compose_file in compose_files:
+		if compose_file in docker_compose_file_exclusions:
+			logger.info(f'Skipping compose file {compose_file}: excluded in config')
+			continue
+
 		_process_compose_file(compose_file, args, config)
 
 

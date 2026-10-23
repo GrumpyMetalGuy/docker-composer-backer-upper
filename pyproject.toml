@@ -1,6 +1,6 @@
 [project]
 name = "docker-composer-backer-upper"
-version = "0.1.0"
+version = "0.2.0"
 description = "A utility to help backup running docker-compose container data folders"
 readme = "README.md"
 requires-python = ">=3.10"

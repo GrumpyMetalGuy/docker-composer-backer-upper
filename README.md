@@ -60,6 +60,27 @@ default file contains comments on which configuration options are available. The
   by an exclusion.
 - The number of folder backups to keep.
 
+## Excluding a service
+
+Mark a service with the `dcbu.exclude` annotation to skip it entirely. It will not be stopped or backed up.
+Either annotation syntax works:
+
+```yaml
+services:
+  db:
+    image: postgres:16
+    annotations:
+      dcbu.exclude: "true"
+```
+
+```yaml
+services:
+  db:
+    image: postgres:16
+    annotations:
+      - dcbu.exclude=true
+```
+
 ## Contributions Welcome!
 
 If you spot anything that is broken here, or identify any improvements, please submit a PR or open an issue, and I'll do

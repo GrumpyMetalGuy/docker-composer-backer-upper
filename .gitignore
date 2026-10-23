@@ -164,3 +164,7 @@ cython_debug/
 # Don't store the compose-spec.json file or the generated model in github, this should be downloaded as needed
 compose-spec.json
 compose_model.py
+
+.idea/
+requirements.txt
+
