@@ -21,3 +21,12 @@ volume_inclusions = []
 
 # Number of backups to keep
 number_backups = 2
+
+# Per-service overrides. Key each entry by the service (or container) name. If a service is not
+# listed here, it falls back to the --ignore-errors flag (off by default).
+#
+# [services.mysql]
+# ignore_errors = true   # tolerate unreadable files and keep a best-effort backup
+#
+# [services.postgres]
+# ignore_errors = false  # fail the backup on the first unreadable file

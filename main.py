@@ -11,7 +11,7 @@ import tarfile
 import docker
 import toml
 import yaml
-from docker_composer import DockerCompose, base
+from docker_composer import DockerCompose
 from loguru import logger
 
 from compose_model import ComposeSpecification, Volumes
@@ -73,7 +73,7 @@ def _get_compose_model(compose_filename: str) -> ComposeSpecification:
 	return ComposeSpecification.model_validate_json(json_str)
 
 
-def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, volumes: set[str]):
+def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, volumes: set[str], ignore_errors: bool):
 	target_backup_file = os.path.join(config['backup_folder'], f'{service_name}.tgz')
 
 	number_of_backups = config.get('number_backups', 2)
@@ -111,7 +111,10 @@ def _backup_volumes(args: argparse.Namespace, config: dict, service_name: str, v
 
 						target_file_context.add(volume, arcname=volume.lstrip('/'))
 				except Exception as e:
-					logger.error(f'Error copying files: {e}')
+					if ignore_errors:
+						logger.warning(f'Error copying files: {e}')
+					else:
+						raise
 
 
 # Annotation key that marks a service as excluded from backup.
@@ -137,6 +140,17 @@ def _bind_host_path(volume: str | Volumes) -> str | None:
 		return source
 
 	return None
+
+
+def _service_ignore_errors(config: dict, service_name: str, global_default: bool) -> bool:
+	"""
+	Resolve whether a service should tolerate copy errors, falling back to the global flag.
+
+	A service listed under [services] may override ignore_errors; otherwise the command-line
+	default applies.
+	"""
+	services = config.get('services', {})
+	return services.get(service_name, {}).get('ignore_errors', global_default)
 
 
 def _service_excluded(service) -> bool:
@@ -194,6 +208,8 @@ def _process_compose_file(compose_filename: str, args: argparse.Namespace, confi
 	if volumes_to_backup:
 		docker_compose_instance = _get_docker_compose_object(args, file=compose_filename)
 
+		failed = False
+
 		try:
 			if args.dry_run:
 				logger.info(f'Would have stopped docker-compose file {compose_filename}')
@@ -206,9 +222,11 @@ def _process_compose_file(compose_filename: str, args: argparse.Namespace, confi
 					)
 
 			for service_name, volumes in volumes_to_backup.items():
-				_backup_volumes(args, config, service_name, volumes)
+				service_ignore_errors = _service_ignore_errors(config, service_name, args.ignore_errors)
+				_backup_volumes(args, config, service_name, volumes, service_ignore_errors)
 		except:
 			logger.exception(f'Attempting to bring down {compose_filename} and copy volumes')
+			failed = True
 		finally:
 			if not args.dry_run:
 				up_results_raw = docker_compose_instance.up(detach=True).call(capture_output=True)
@@ -218,38 +236,44 @@ def _process_compose_file(compose_filename: str, args: argparse.Namespace, confi
 						f'Error restarting docker-compose file {compose_filename}, return code was {up_results_raw.returncode}'
 					)
 
+		return not failed
 
-def process(args: argparse.Namespace):
+	return True
+
+
+def process(args: argparse.Namespace) -> int:
 	"""
 	Main logic execution. Will load in all compose files from the given directory, stop the docker container if
 	running, then back up any files that it can work out the location of, then restart the container again.
 
 	:param args: Program arguments.
+	:return: Exit code, 0 if every backup succeeded.
 	"""
 
 	compose_files = _get_compose_files()
 
 	if not compose_files:
 		logger.info('No docker compose commands found, nothing to do.')
-		return
+		return 0
 
 	config = toml.load(args.config)
 
 	docker_compose_file_exclusions = config.get('docker_compose_exclusions', [])
+
+	faled = False
 
 	for compose_file in compose_files:
 		if compose_file in docker_compose_file_exclusions:
 			logger.info(f'Skipping compose file {compose_file}: excluded in config')
 			continue
 
-		_process_compose_file(compose_file, args, config)
+		if not _process_compose_file(compose_file, args, config):
+			faled = True
+
+	return 1 if faled else 0
 
 
 def main():
-	# Stop showing DEBUG messages from docker_composer_2
-	base.logger.remove()
-	base.logger.add(sys.stdout, level='INFO')
-
 	argument_parser = argparse.ArgumentParser(
 		description='Utility program to manage backups for docker-compose Docker containers'
 	)
@@ -278,9 +302,16 @@ def main():
 		action='store_true',
 	)
 
+	argument_parser.add_argument(
+		'-i',
+		'--ignore-errors',
+		help='continue the backup when individual files cannot be read',
+		action='store_true',
+	)
+
 	args = argument_parser.parse_args()
 
-	process(args)
+	sys.exit(process(args))
 
 
 if __name__ == '__main__':

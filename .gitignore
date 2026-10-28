@@ -165,6 +165,9 @@ cython_debug/
 compose-spec.json
 compose_model.py
 
+# Local user config; copy config.toml.example to config.toml and edit it
+config.toml
+
 .idea/
 requirements.txt
 

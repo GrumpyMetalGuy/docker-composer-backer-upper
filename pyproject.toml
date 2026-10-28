@@ -1,13 +1,13 @@
 [project]
 name = "docker-composer-backer-upper"
-version = "0.2.0"
+version = "0.3.0"
 description = "A utility to help backup running docker-compose container data folders"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "datamodel-code-generator[http]>=0.26.1",
     "docker>=7.1.0",
-    "docker-composer>=2.79.7",
+    "docker-composer>=5.0",
     "loguru>=0.5.3",
     "pre-commit>=3.8.0",
     "pydantic>=2.9.2",
@@ -47,7 +47,7 @@ docstring-code-format = true
 field-constraints = true
 snake-case-field = true
 strip-default-none = false
-target-python-version = "3.10"
+target-python-version = "3.11"
 url = "https://raw.githubusercontent.com/compose-spec/compose-spec/refs/heads/main/schema/compose-spec.json"
 input-file-type = "jsonschema"
 output-model-type = "pydantic_v2.BaseModel"

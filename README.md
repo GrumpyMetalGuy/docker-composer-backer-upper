@@ -47,10 +47,21 @@ You can perform a dry run without copying any data by using the -```d``` option:
 uv run main -d
 ```
 
+By default, the backer-upper fails the backup for a service if any of its files cannot be read (for example a
+permission error). To instead continue and produce a best-effort archive, pass the ```-i``` option:
+
+```
+uv run main -i
+```
+
+You can also control this behaviour per service using the ```[services]``` section in the config file (see below).
+
 ## Configuration
 
-By default, the backer-upper will look for a file called ```config.toml``` in the same directory as the main script. The
-default file contains comments on which configuration options are available. The options available are:
+Before running, copy ```config.toml.example``` to ```config.toml``` and edit it to suit. The backer-upper always loads
+```config.toml``` from the same directory as the main script (or the file given with ```-c```). ```config.toml``` is
+git-ignored, so your custom settings survive pulls. The example file contains comments on which configuration options are
+available. The options available are:
 
 - The backup folder location.
 - A list of docker-compose file exclusions, which will exclude any running docker-compose containers using these
@@ -59,6 +70,26 @@ default file contains comments on which configuration options are available. The
 - A list of volume inclusion regexes, which will force volumes to be backed up if matched, even if they would be matched
   by an exclusion.
 - The number of folder backups to keep.
+
+## Per-service error handling
+
+By default, a copy error (such as a permission problem) fails the backup for that service and makes the run exit with a
+non-zero status. The container is still restarted. If you care less about some containers, you can tell the backer-upper
+to tolerate unreadable files for those services and keep a best-effort backup.
+
+Use the ```[services]``` table in ```config.toml```, keyed by the service or container name. Set ```ignore_errors``` to
+```true``` to ignore copy errors, or ```false``` to fail on them:
+
+```toml
+[services.mysql]
+ignore_errors = true
+
+[services.postgres]
+ignore_errors = false
+```
+
+A service that is not listed falls back to the ```-i``` flag (off by default). The ```-i``` flag and a service's own
+setting combine as: the service setting wins, otherwise the flag, otherwise fail.
 
 ## Excluding a service
 
